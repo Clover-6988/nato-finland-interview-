@@ -30,3 +30,6 @@ wheels/
 *.csv
 data/
 .aws-sam/
+.env
+venv/
+app/data/

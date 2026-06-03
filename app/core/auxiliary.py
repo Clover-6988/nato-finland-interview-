@@ -13,9 +13,9 @@ def chat_to_string(chat:list, only_topic:int=None, until_topic:int=None) -> str:
         if until_topic and message['topic_idx'] == until_topic:
             break
         if message["type"] == "question":
-            topic_history += f'Interviewer: "{message['content']}"\n'
+            topic_history += 'Interviewer: "{}"\n'.format(message['content'])
         if message["type"] == "answer":
-            topic_history += f'Interviewee: "{message['content']}"\n'
+            topic_history += 'Interviewee: "{}"\n'.format(message['content'])
     return topic_history.strip()
 
 def fill_prompt_with_interview(template:str, topics:list, history:list, user_message:str=None) -> str:
@@ -56,9 +56,9 @@ def execute_queries(query, task_args:dict) -> dict:
         }
         for future in as_completed(futures):
             task = futures[future]
-            resp = future.result().choices[0].message.content.strip("\n\" '''")
+            resp = future.result().content[0].text.strip("\n\" '''")
             suggestions[task] = resp
 
-    logging.info("OpenAI query took {:.2f} seconds".format(time.time() - st))
-    logging.info(f"OpenAI query returned: {suggestions}")
+    logging.info("Anthropic query took {:.2f} seconds".format(time.time() - st))
+    logging.info(f"Anthropic query returned: {suggestions}")
     return suggestions

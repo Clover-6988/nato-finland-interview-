@@ -1,8 +1,8 @@
 import logging
 import os
-from parameters import INTERVIEW_PARAMETERS, OPENAI_API_KEY
+from parameters import INTERVIEW_PARAMETERS, ANTHROPIC_API_KEY
 from core.manager import InterviewManager
-from core.agent import LLMAgent
+from core.agent import LLMAgent, MockLLMAgent
 
 def connect_to_database():
     """ Instantiate specific backend database. """
@@ -13,7 +13,10 @@ def connect_to_database():
     from database.file import FileWriter
     return FileWriter()
 
-agent = LLMAgent(OPENAI_API_KEY)
+if os.getenv("MOCK_MODE", "").lower() in ("1", "true", "yes"):
+    agent = MockLLMAgent()
+else:
+    agent = LLMAgent(ANTHROPIC_API_KEY)
 db = connect_to_database()
 
 def load_interview_session(session_id:str) -> dict:
@@ -55,7 +58,7 @@ def retrieve_sessions(sessions:list=None) -> dict:
     return db.retrieve_sessions(sessions)
 
 def transcribe(audio:str) -> dict:
-    """ Return audio file transcription using OpenAI Whisper API """
+    """ Return audio file transcription. """
     logging.critical(f"Audio is: {type(audio)}...")
     transcription = agent.transcribe(audio)
     logging.info(f"Returning transcription text: '{transcription}'")

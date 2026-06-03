@@ -150,7 +150,7 @@ function appendChatbotMessage(message, chatArea, status) {
 }
 
 // Add the initial question to the chat area from Flask message
-var firstQuestion = "{{ data['message'] }}"
+var firstQuestion = {{ data['message'] | tojson }}
 if (firstQuestion == "interview_in_progress_error") {
     submitButton.disabled = true;
     submitButton.style.backgroundColor = '#ccc';
@@ -184,6 +184,7 @@ submitButton.addEventListener("click", function () {
         // Make the submit button unclickable until the chatbot replies
         submitButton.disabled = true;
         submitButton.style.backgroundColor = '#ccc';
+        submitButton.style.cursor = 'default';
         submitButton.innerText = "Waiting for reply...";
         // Also disable the audio record button.
         recordButton.disabled = true;
@@ -222,14 +223,17 @@ submitButton.addEventListener("click", function () {
                     next_question = next_question.replace("---END---", "");
                     next_question = next_question.trim();
                     submitButton.disabled = true;
-                    submitButton.innerText = "End of interview";
+                    submitButton.style.backgroundColor = '#28a745';
+                    submitButton.style.cursor = 'default';
+                    submitButton.innerText = "Interview complete";
                     // Also disable the audio record button.
                     recordButton.disabled = true;
                 } else {
                     // Interview continues
                     submitButton.disabled = false;
-                    submitButton.innerText = "Submit response";
                     submitButton.style.backgroundColor = '#007BFF';
+                    submitButton.style.cursor = 'pointer';
+                    submitButton.innerText = "Submit response";
                     // Re-enable audio record button.
                     recordButton.disabled = false;
                 }
