@@ -37,7 +37,9 @@ Each config has:
 - `closing_questions` — empty list (`[]`); end-of-interview is handled by `end_of_interview_message`
 - Four agent dicts (`summary`, `transition`, `probe`, `moderator`) each with `model`, `max_tokens`, `temperature`, and a `prompt`
 
-Prompt templates support these placeholders: `{current_topic_history}`, `{summary}`, `{topics}`, `{current_topic}`, `{next_interview_topic}`, `{question}`, `{answer}`.
+The `probe` dict's `prompt` field is an unused placeholder — `probe_within_topic()` in `core/agent.py` builds its prompt inline with the exact last question, last answer, and next required question as concrete values. The `model`, `temperature`, and `max_tokens` fields are still read from the config.
+
+Prompt templates for the other three agents support these placeholders: `{current_topic_history}`, `{summary}`, `{topics}`, `{current_topic}`, `{next_interview_topic}`, `{question}`, `{answer}`.
 
 The API key is read from the `ANTHROPIC_API_KEY` environment variable (set it there, not hardcoded).
 
@@ -118,6 +120,3 @@ End → end_of_interview_message
 | `DATA_DIR` | `./app/data` | Directory for local JSON session files |
 | `LOG_LEVEL` | `ERROR` | Python logging level |
 
-## Dependency file
-
-`app/requirements.txt` — production deps (`anthropic`, `Flask`). Install with `pip install -r app/requirements.txt`.
