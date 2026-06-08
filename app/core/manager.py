@@ -36,9 +36,17 @@ class InterviewManager(object):
     def resume_session(self, parameters:dict):
         """ Load (remote) history into current Interview object. """
         self.history = self.client.load_remote_session(self.session_id)
-        assert len(self.history) >= 1 
-        assert self.history[-1].get('session_id') == self.session_id
-        # Set current state equal to last
+        if not self.history:
+            raise AssertionError(
+                f"Session '{self.session_id}' not found — "
+                "file may have been lost after a server restart."
+            )
+        stored_id = self.history[-1].get('session_id')
+        if stored_id != self.session_id:
+            raise AssertionError(
+                f"Session ID mismatch for '{self.session_id}': "
+                f"file contains '{stored_id}'."
+            )
         self.current_state = self.history[-1].copy()
         self.parameters = parameters
         logging.info(f"Resumed existing interview session '{self.session_id}'")
@@ -122,7 +130,7 @@ class InterviewManager(object):
         self.current_state["question_idx"] += 1  
 
     def update_session(self):
-        """ Update current state in remote database """ 
-        self.history[-1] = self.current_state
+        """ Update current state in remote database """
+        self.history[-1] = self.current_state.copy()
         self.client.update_remote_session(self.session_id, self.history)
    

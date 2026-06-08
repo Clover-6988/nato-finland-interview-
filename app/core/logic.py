@@ -82,7 +82,8 @@ def next_question(session_id:str, interview_id:str, user_message:str=None) -> di
     try:
         interview = resume_interview_session(session_id, interview_id, user_message)
         parameters = interview.parameters
-    except AssertionError:
+    except AssertionError as e:
+        logging.warning(f"Could not resume session '{session_id}': {e} — starting new session.")
         return begin_interview_session(session_id, interview_id)
 
     # Exit condition: this interview has been previously ended
