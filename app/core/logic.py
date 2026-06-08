@@ -87,12 +87,21 @@ def next_question(session_id:str, interview_id:str, user_message:str=None) -> di
         response: (dict) containing `message` from interviewer
     """
 
-    # Resume if interview has started, otherwise begin (new) session
+    # Resume existing session. Fall back to begin_interview_session() only when the
+    # session file doesn't exist yet (genuine first visit via POST without a prior GET).
+    # If the file exists but can't be loaded, return an error instead — calling
+    # begin_interview_session() in that case would send first_question mid-interview.
     try:
         interview = resume_interview_session(session_id, interview_id, user_message)
         parameters = interview.parameters
     except AssertionError as e:
         logging.error(f"SESSION RESUME FAILED for '{session_id}': {e}")
+        if db.load_remote_session(session_id):
+            # Session file exists — resume failure is unexpected. Return a retryable
+            # error rather than resetting to first_question.
+            return {'session_id': session_id,
+                    'message': 'There was a technical issue resuming your session. '
+                               'Please submit your answer again.'}
         return begin_interview_session(session_id, interview_id)
 
     # Exit condition: this interview has been previously ended
