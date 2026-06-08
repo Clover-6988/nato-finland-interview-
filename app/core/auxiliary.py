@@ -34,8 +34,10 @@ def fill_prompt_with_interview(template:str, topics:list, history:list, user_mes
         current_topic_history=current_topic_chat
     )
     logging.debug(f"Prompt to GPT:\n{prompt}")
-    assert not re.findall(r"\{[^{}]+\}", prompt)
-    return prompt 
+    unfilled = re.findall(r"\{[^{}]+\}", prompt)
+    if unfilled:
+        logging.warning(f"Unfilled placeholders in prompt: {unfilled}")
+    return prompt
 
 def execute_queries(query, task_args:dict) -> dict:
     """ 

@@ -154,26 +154,37 @@ def next_question(session_id:str, interview_id:str, user_message:str=None) -> di
         f"on_last_question={on_last_question}"
     )
 
-    # Continue in workflow
-    if on_last_topic and on_last_question:
-        # Close interview with pre-determined closing questions
-        next_question = interview.get_final_question()
-        interview.update_closing()
-        if not next_question:
-            # Exit condition: have already produced last "final" question
-            interview.terminate()
-            interview.update_session()
-            return {'session_id':session_id, 'message':parameters['end_of_interview_message']}
+    # Continue in workflow.
+    # Wrapped in try/except so any LLM API failure (timeout, network error, etc.)
+    # returns a recoverable retry message instead of a 500 that sends the user
+    # back to the welcome screen.
+    try:
+        if on_last_topic and on_last_question:
+            # Close interview with pre-determined closing questions
+            next_question = interview.get_final_question()
+            interview.update_closing()
+            if not next_question:
+                # Exit condition: have already produced last "final" question
+                interview.terminate()
+                interview.update_session()
+                return {'session_id':session_id, 'message':parameters['end_of_interview_message']}
 
-    elif on_last_question:
-        # Transition to *next* topic...
-        next_question, summary = agent.transition_topic(interview.get_history())
-        interview.update_transition(summary)
+        elif on_last_question:
+            # Transition to *next* topic...
+            next_question, summary = agent.transition_topic(interview.get_history())
+            interview.update_transition(summary)
 
-    else:
-        # Proceed *within* topic...
-        next_question = agent.probe_within_topic(interview.get_history())
-        interview.update_probe()
+        else:
+            # Proceed *within* topic...
+            next_question = agent.probe_within_topic(interview.get_history())
+            interview.update_probe()
+
+    except Exception as e:
+        logging.error(f"LLM workflow error for session '{session_id}': {e}")
+        # Save current state (answer already stored) so the session can be resumed.
+        interview.update_session()
+        return {'session_id': session_id,
+                'message': 'There was a technical issue generating the next question. Please submit your answer again.'}
 
     # Update interview with new output
     logging.info(f"Interviewer responded: '{next_question}'")
