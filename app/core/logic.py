@@ -161,4 +161,4 @@ def next_question(session_id:str, interview_id:str, user_message:str=None) -> di
             interview.update_session()
             return {'session_id':session_id, 'message':parameters['end_of_interview_message']}
     
-    return {'session_id':session_id, 'message':next_question}
+    return {'session_id':session_id, 'message':next_question, 'topic_idx': interview.get_current_topic()}

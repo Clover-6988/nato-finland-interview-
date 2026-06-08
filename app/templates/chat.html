@@ -1,256 +1,722 @@
 <!DOCTYPE html>
-
+<html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <script type=text/javascript src="https://ajax.googleapis.com/ajax/libs/jquery/3.1.0/jquery.min.js"></script>
-</head>
- 
-<body>
-    <div style="width: 95%; margin-left: auto; margin-right: auto; min-width: 300px; max-width: 800px; background-color: #fff; display: flex; flex-direction: column; padding: 1px; height: 700px;" class="chat-container">
-    
-        <!-- Chat Area: The conversation history goes here. Contains questions and previously written responses. -->
-        <div style="overflow-y: scroll; height: calc(100% - 200px); margin-bottom: 5px; border: 2px solid #ddd; border-radius: 5px; padding: 10px; display: flex; flex-direction: column; align-items: flex-end;" id="chatArea">&nbsp;</div>
-    
-        <!-- Text input field: Respondents write their responses in this container. It sits directly below the chat area. -->
-        <div style="position: relative; margin-top: 5px;" class="input-container"><textarea style="width: 100%; resize: vertical; font-size: 18px; min-height: 150px; max-height: 150px; border: 2px solid #A9A9A9; border-radius: 10px; padding: 10px; overflow: auto;" placeholder="Type your message here..." maxlength="3000" id="inputBox"></textarea></div>
-    
-        <!-- Footer: Contains optional instructions to the respondent and the submit button. Placed below the text input field.  -->
-        <div style="display: flex; justify-content: flex-end; padding-top: 10px;" class="submit-button-container">
-            <!-- Optional instructions. Leave empty if not needed. -->
-            <div style="flex-grow: 1; font-size: 18px; border: none; height: 30px; line-height: 1.2; padding-left: 10px; color: rgb(53, 53, 53);">Please write full sentences.</div>
-            <!-- Record button: Respondents have to click this button to record a response. -->
-            <button style="background-color: #D3D3D3; color: black; border: none; padding: 10px 20px; border-radius: 5px; cursor: pointer; font-size: 18px; transition: background-color 0.3s; margin-right: 10px;" id="recordButton">Record response</button>
-            <!-- Submit button: Respondents have to click this button to submit a response. -->
-            <button style="background-color: #007AC0; color: white; border: none; padding: 10px 20px; border-radius: 5px; cursor: pointer; font-size: 18px; transition: background-color 0.3s;" id="submitButton">Submit response</button>
-        </div>
-    </div>
-</body>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.1.0/jquery.min.js"></script>
+    <style>
+        /* ── Reset ───────────────────────────────────────── */
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto,
+                         Helvetica, Arial, sans-serif;
+            background: #EDF2F7;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 16px;
+        }
+
+        /* ── Outer container ─────────────────────────────── */
+        .chat-shell {
+            width: 100%;
+            max-width: 700px;
+            height: 90vh;
+            max-height: 840px;
+            background: #fff;
+            border-radius: 20px;
+            box-shadow: 0 8px 36px rgba(0, 0, 0, 0.13);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        /* ── Header ──────────────────────────────────────── */
+        .chat-header {
+            background: #007AC0;
+            color: #fff;
+            padding: 14px 22px;
+            font-size: 15px;
+            font-weight: 600;
+            letter-spacing: 0.025em;
+            flex-shrink: 0;
+        }
+
+        /* ── Messages area ───────────────────────────────── */
+        .chat-messages {
+            flex: 1;
+            overflow-y: auto;
+            padding: 20px 18px;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            scroll-behavior: smooth;
+        }
+
+        /* Bubbles */
+        .msg {
+            max-width: 82%;
+            padding: 12px 16px;
+            border-radius: 18px;
+            font-size: 15px;
+            line-height: 1.65;
+            word-wrap: break-word;
+            white-space: pre-wrap;
+        }
+        .msg-bot {
+            align-self: flex-start;
+            background: #F0F4F8;
+            color: #1a202c;
+            border-bottom-left-radius: 4px;
+        }
+        .msg-user {
+            align-self: flex-end;
+            background: #007AC0;
+            color: #fff;
+            border-bottom-right-radius: 4px;
+        }
+
+        /* Typing indicator */
+        .typing-indicator {
+            align-self: flex-start;
+            background: #F0F4F8;
+            border-radius: 18px;
+            border-bottom-left-radius: 4px;
+            padding: 14px 18px;
+            display: flex;
+            gap: 5px;
+            align-items: center;
+        }
+        .typing-indicator span {
+            display: inline-block;
+            width: 8px; height: 8px;
+            background: #A0AEC0;
+            border-radius: 50%;
+            animation: tbounce 1.2s ease-in-out infinite;
+        }
+        .typing-indicator span:nth-child(2) { animation-delay: 0.2s; }
+        .typing-indicator span:nth-child(3) { animation-delay: 0.4s; }
+        @keyframes tbounce {
+            0%, 80%, 100% { transform: scale(0.8); opacity: 0.55; }
+            40%            { transform: scale(1.1) translateY(-5px); opacity: 1; }
+        }
+
+        /* ── Input panel ─────────────────────────────────── */
+        .input-panel {
+            flex-shrink: 0;
+            padding: 14px 18px 20px;
+            border-top: 1px solid #E2E8F0;
+            background: #fff;
+        }
+
+        /* Panel status line (waiting / complete) */
+        .panel-status {
+            text-align: center;
+            font-size: 14px;
+            color: #718096;
+            padding: 10px 0;
+        }
+        .panel-status.done {
+            color: #38A169;
+            font-weight: 600;
+        }
+
+        /* ── Shared: pill option buttons ─────────────────── */
+        .opts-grid {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+        .opt-pill {
+            padding: 9px 20px;
+            border-radius: 999px;
+            border: 2px solid #CBD5E0;
+            background: #F7FAFC;
+            color: #2D3748;
+            font-size: 14px;
+            font-family: inherit;
+            cursor: pointer;
+            transition: background 0.15s, border-color 0.15s, color 0.15s;
+            line-height: 1.3;
+            text-align: left;
+        }
+        .opt-pill:hover:not(:disabled) {
+            background: #EBF4FF;
+            border-color: #007AC0;
+            color: #005A8E;
+        }
+        .opt-pill.on {
+            background: #007AC0;
+            border-color: #007AC0;
+            color: #fff;
+        }
+        .opt-pill.on:hover:not(:disabled) {
+            background: #005f99;
+            border-color: #005f99;
+        }
+        .opt-pill:disabled {
+            opacity: 0.5;
+            cursor: default;
+        }
+
+        /* ── Scale buttons ───────────────────────────────── */
+        .scale-row {
+            display: flex;
+            gap: 6px;
+            align-items: flex-start;
+        }
+        .scale-item {
+            flex: 1;
+            min-width: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 5px;
+        }
+        .scale-num {
+            width: 100%;
+            height: 52px;
+            border: 2px solid #CBD5E0;
+            border-radius: 10px;
+            background: #F7FAFC;
+            color: #2D3748;
+            font-size: 18px;
+            font-weight: 700;
+            font-family: inherit;
+            cursor: pointer;
+            transition: background 0.15s, border-color 0.15s, color 0.15s;
+        }
+        .scale-num:hover:not(:disabled) {
+            background: #EBF4FF;
+            border-color: #007AC0;
+            color: #005A8E;
+        }
+        .scale-num.on {
+            background: #007AC0;
+            border-color: #007AC0;
+            color: #fff;
+        }
+        .scale-num:disabled { opacity: 0.5; cursor: default; }
+        .scale-lbl {
+            font-size: 10px;
+            color: #718096;
+            text-align: center;
+            line-height: 1.25;
+            word-break: break-word;
+        }
+
+        /* ── Action buttons (submit / record) ────────────── */
+        .act-btn {
+            padding: 10px 22px;
+            border-radius: 999px;
+            border: none;
+            font-size: 14px;
+            font-family: inherit;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background 0.15s, border-color 0.15s;
+        }
+        .act-btn.primary {
+            background: #007AC0;
+            color: #fff;
+        }
+        .act-btn.primary:hover:not(:disabled) { background: #005f99; }
+        .act-btn.primary:disabled { background: #A0AEC0; cursor: default; }
+        .act-btn.secondary {
+            background: #F7FAFC;
+            color: #2D3748;
+            border: 2px solid #CBD5E0;
+        }
+        .act-btn.secondary:hover:not(:disabled) { border-color: #007AC0; color: #005A8E; }
+        .act-btn.secondary:disabled { opacity: 0.5; cursor: default; }
+
+        /* Multi-select submit row */
+        .multi-submit-row {
+            display: flex;
+            justify-content: flex-end;
+            margin-top: 10px;
+        }
+
+        /* ── Open-text layout ────────────────────────────── */
+        .open-wrap     { display: flex; flex-direction: column; gap: 8px; }
+        .open-textarea {
+            width: 100%;
+            min-height: 110px;
+            max-height: 160px;
+            resize: vertical;
+            border: 2px solid #CBD5E0;
+            border-radius: 12px;
+            padding: 12px 14px;
+            font-size: 15px;
+            font-family: inherit;
+            color: #2D3748;
+            line-height: 1.55;
+            outline: none;
+            transition: border-color 0.15s;
+        }
+        .open-textarea:focus   { border-color: #007AC0; }
+        .open-textarea:disabled { background: #F7FAFC; color: #718096; }
+        .opt-ta { min-height: 72px; max-height: 120px; margin-top: 10px; }
+        .open-footer {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+        .open-hint  { font-size: 13px; color: #A0AEC0; }
+        .open-btns  { display: flex; gap: 8px; }
+    </style>
+</head>
+<body>
+<div class="chat-shell">
+    <div class="chat-header">Academic Research Interview</div>
+    <div class="chat-messages" id="chatArea"></div>
+    <div class="input-panel"   id="inputPanel"></div>
+</div>
 
 <script>
+// ═══════════════════════════════════════════════
+//  STATE
+// ═══════════════════════════════════════════════
+const chatArea   = document.getElementById('chatArea');
+const inputPanel = document.getElementById('inputPanel');
+let waiting         = false;
+let done            = false;
+let currentTopicIdx = 1;  // 1 = Section A (auto-submit), >1 = B/C/D (select + optional text)
+// Audio state
+let mediaRec  = null;
+let recStream = null;
+let audioChunks = [];
 
-var chatArea = document.getElementById("chatArea");
-var submitButton = document.getElementById("submitButton");
-var userInput = document.getElementById("inputBox")
+// Prevent copy / paste in the chat history
+['copy', 'cut', 'paste'].forEach(ev =>
+    chatArea.addEventListener(ev, e => e.preventDefault())
+);
 
-////////////////////////////////
-//// START AUDIO INPUT CODE ////
-////////////////////////////////    
-let mediaRecorder;
-let audioChunks = []; 
-let stream;
-var recordButton = document.getElementById("recordButton"); // The record button
-
-recordButton.addEventListener("click", async () => {
-    if (recordButton.textContent === "Record response") {
-        // Start recording
-        try {
-            stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-            mediaRecorder = new MediaRecorder(stream);
-            audioChunks = []; // Reset the audio chunks
-            recordButton.textContent = "Stop recording";
-            submitButton.disabled = true;
-            mediaRecorder.start();
-            mediaRecorder.ondataavailable = (event) => {
-                audioChunks.push(event.data);
-            };
-        } catch (err) {
-            alert("Error accessing microphone: " + err.message);
-            submitButton.disabled = false;
-        }
-    } else if (recordButton.textContent === "Stop recording") {
-        // Stop recording
-        recordButton.textContent = "Transcribing audio...";
-        recordButton.disabled = true;
-        mediaRecorder.stop();
-        mediaRecorder.onstop = async () => {
-            // Create audio blob in base64 format
-            const audioBlob = new Blob(audioChunks, { type: "audio/webm" });
-            const reader = new FileReader();
-            reader.onloadend = async () => {
-                const audioBase64 = reader.result.split(",")[1]; // Remove the "data:..." prefix
-                // Send audio to the transcribe API endpoint
-                try {
-                    jQuery.ajax({
-                        url: "{{ url_for('transcribe') }}",
-                        type: "POST",
-                        timeout: 60000,
-                        data: JSON.stringify({
-                            audio: audioBase64
-                        }),
-                        contentType: "application/json",
-                        dataType: "json",
-                        success: function (data) {
-                            const transcript = data.transcription || "Transcription failed. Please try again.";
-                            userInput.value = transcript;
-                            recordButton.textContent = "Record response";
-                            submitButton.disabled = false;
-                        },
-                        error: function (jqXHR, textStatus, errorThrown) {
-                            console.error("Error:", errorThrown);
-                            alert("Something went wrong with the transcription. Please try again.");
-                            recordButton.textContent = "Record response";
-                            submitButton.disabled = false;
-                        }
-                    });
-                } catch (error) {
-                    console.error("Communication Error:", error);
-                    alert("Error communicating with the API: " + error.message);
-                    recordButton.textContent = "Record response";
-                } finally {
-                    // Clean up
-                    audioChunks = [];
-                    recordButton.disabled = false;
-                    submitButton.disabled = false;
-                }
-            };
-
-            reader.readAsDataURL(audioBlob); // Trigger the Base64 encoding
-            stream.getTracks().forEach(track => track.stop()); // Stop microphone access
-        };
-
-    }
-});
-////////////////////////////////
-/// END OF AUDIO INPUT CODE ////
-////////////////////////////////
-
-///////////////////////////////////////////
-/// ADD NEW MESSAGES WITH DANCING DOTS ////
-///////////////////////////////////////////
-function appendChatbotMessage(message, chatArea, status) {      
-    // New message from the chatbot
-    var messageContent = document.createElement('div');
-    messageContent.style.cssText = "word-wrap: break-word; width: 80%; border: 1px solid #F6F6F6; border-radius: 5px; padding: 5px; margin-bottom: 10px; background-color: #F6F6F6; display: block; margin-right: auto;  font-size: 18px; line-height: 1.5;";
-
-    if (status === "waiting") {
-        // Dancing dots animation
-        messageContent.innerHTML = `
-        <div word-wrap: break-word; width: 80%; border: 1px solid #F6F6F6; border-radius: 5px; padding: 5px; margin-bottom: 10px; background-color: #F6F6F6; display: block; margin-right: auto;>
-        <div id="wave" style="position:relative; vertical-align: center text-align:left"; text-align:center;">
-        <span class="dot" style="display:inline-block; width:12px; height:6px; border-radius:50%; margin-right:3px; background:#303131; animation: wave 1.3s linear infinite;"></span>
-        <span class="dot" style="display:inline-block; width:12px; height:6px; border-radius:50%; margin-right:3px; background:#303131; animation: wave 1.3s linear infinite; animation-delay: -1.1s;"></span>
-        <span class="dot" style="display:inline-block; width:12px; height:6px; border-radius:50%; margin-right:3px; background:#303131; animation: wave 1.3s linear infinite; animation-delay: -0.9s;"></span>
-        </div><style>@keyframes wave {0%, 60%, 100% {transform: initial;} 30% {transform: translateY(-7px);}}</style></div>`;
-        messageContent.id = "dancingDots"; 
-    } else if (status === "response") {
-        var existingDots = document.getElementById("dancingDots");
-        if (existingDots) {
-            existingDots.innerText = message.trim();
-            existingDots.removeAttribute('id');
-            chatArea.scrollTop = chatArea.scrollHeight;
-            return; // Since the message is replaced, we don't need to append anything new
-        } else {
-            messageContent.innerText = message.trim();
-        }
-    }
-    chatArea.appendChild(messageContent);
+// ═══════════════════════════════════════════════
+//  CHAT RENDERING
+// ═══════════════════════════════════════════════
+function botMsg(text) {
+    const d = document.createElement('div');
+    d.className = 'msg msg-bot';
+    d.textContent = text.trim();
+    chatArea.appendChild(d);
+    chatArea.scrollTop = chatArea.scrollHeight;
+}
+function userMsg(text) {
+    const d = document.createElement('div');
+    d.className = 'msg msg-user';
+    d.textContent = text.trim();
+    chatArea.appendChild(d);
+    chatArea.scrollTop = chatArea.scrollHeight;
+}
+function showTyping() {
+    const d = document.createElement('div');
+    d.id = 'typing';
+    d.className = 'typing-indicator';
+    d.innerHTML = '<span></span><span></span><span></span>';
+    chatArea.appendChild(d);
+    chatArea.scrollTop = chatArea.scrollHeight;
+}
+function resolveTyping(text) {
+    const el = document.getElementById('typing');
+    const d  = document.createElement('div');
+    d.className   = 'msg msg-bot';
+    d.textContent = text.trim();
+    if (el) el.replaceWith(d); else chatArea.appendChild(d);
     chatArea.scrollTop = chatArea.scrollHeight;
 }
 
-// Add the initial question to the chat area from Flask message
-var firstQuestion = {{ data['message'] | tojson }}
-if (firstQuestion == "interview_in_progress_error") {
-    submitButton.disabled = true;
-    submitButton.style.backgroundColor = '#ccc';
-    firstQuestion = "This interview session is already in progress. Please exit."
-}
-appendChatbotMessage(firstQuestion, chatArea, "response");
-
-
-////////////////////////////////////////////////////////////
-// Prevent copy, cut, and paste in chatArea and userInput /
-////////////////////////////////////////////////////////////
-["copy", "cut", "paste"].forEach(eventType => {
-    [chatArea, userInput].forEach(element => {
-        element.addEventListener(eventType, event => {
-            event.preventDefault();
-        });
-    });
-});
-
-
-////////////////////////////////////////////////////////////
-// GENERATE THE NEXT QUESTION ON SUBMIT BUTTON CLICK ///////
-////////////////////////////////////////////////////////////
-submitButton.addEventListener("click", function () {
-    var userMessage = userInput.value.trim();
-    // Take action only for non-empty messages.
-    if (userMessage) {
-        // Clear the input field
-        userInput.value = "";
-
-        // Make the submit button unclickable until the chatbot replies
-        submitButton.disabled = true;
-        submitButton.style.backgroundColor = '#ccc';
-        submitButton.style.cursor = 'default';
-        submitButton.innerText = "Waiting for reply...";
-        // Also disable the audio record button.
-        recordButton.disabled = true;
-
-        // Add user message to the chat area
-        var messageContent = document.createElement('div');
-        messageContent.style.cssText = "display: inline-block; max-width: 80%; border: 1px solid #ddd; border-radius: 5px; padding: 5px; margin-bottom: 10px; background-color: #ddd; word-wrap: break-word; white-space: pre-wrap; box-sizing: border-box; font-size: 18px; text-align: left; line-height: 1.5;";
-        messageContent.innerText = userMessage;
-                    
-        // Add label and message of the user to the chat area and scroll to the bottom
-        chatArea.appendChild(messageContent);
-        chatArea.scrollTop = chatArea.scrollHeight;
-
-        // Add dancing dots
-        appendChatbotMessage("", chatArea, "waiting");
-
-        // API CALL: GENERATE THE NEXT QUESTION
-        jQuery.ajax({
-            url: "{{ url_for('next') }}",
-            timeout: 60000,
-            type: "POST",
-            data: JSON.stringify({
-                user_message: userMessage,
-                session_id: "{{ data['session_id'] }}",
-                interview_id: "{{ data['interview_id'] }}"
-            }),
-            contentType: "application/json",
-            dataType: "json",
-            success: function (data) {
-                var next_question = data.message.trim();
-
-                // Check if this is the last message of the interview
-                var endInterviewIndex = next_question.indexOf("---END---");
-                if (endInterviewIndex !== -1) {
-                    // End of interview
-                    next_question = next_question.replace("---END---", "");
-                    next_question = next_question.trim();
-                    submitButton.disabled = true;
-                    submitButton.style.backgroundColor = '#28a745';
-                    submitButton.style.cursor = 'default';
-                    submitButton.innerText = "Interview complete";
-                    // Also disable the audio record button.
-                    recordButton.disabled = true;
-                } else {
-                    // Interview continues
-                    submitButton.disabled = false;
-                    submitButton.style.backgroundColor = '#007BFF';
-                    submitButton.style.cursor = 'pointer';
-                    submitButton.innerText = "Submit response";
-                    // Re-enable audio record button.
-                    recordButton.disabled = false;
-                }
-                appendChatbotMessage(next_question, chatArea, "response");
-            },
-            // REQUEST UNSUCCESSFUL
-            error: function (jqXHR, textStatus, errorThrown) {
-                console.error("Error:", errorThrown);
-                appendChatbotMessage("There was a technical error. Please try again.", chatArea, "response");
-                submitButton.disabled = false;
-                submitButton.style.backgroundColor = '#007BFF';
-                submitButton.innerText = "Submit response";
-                // Also disable the audio record button.
-                recordButton.disabled = false;
-            }
-        });
+// ═══════════════════════════════════════════════
+//  AUDIO RECORDING
+// ═══════════════════════════════════════════════
+function handleRecord(btn, onTranscript) {
+    if (!mediaRec) {
+        // Start
+        navigator.mediaDevices.getUserMedia({ audio: true }).then(stream => {
+            recStream   = stream;
+            audioChunks = [];
+            mediaRec    = new MediaRecorder(stream);
+            mediaRec.ondataavailable = e => audioChunks.push(e.data);
+            mediaRec.start();
+            btn.textContent = 'Stop recording';
+        }).catch(err => alert('Microphone error: ' + err.message));
+    } else {
+        // Stop + transcribe
+        btn.textContent = 'Transcribing…';
+        btn.disabled    = true;
+        mediaRec.stop();
+        mediaRec.onstop = () => {
+            const blob   = new Blob(audioChunks, { type: 'audio/webm' });
+            const reader = new FileReader();
+            reader.onloadend = () => {
+                jQuery.ajax({
+                    url: "{{ url_for('transcribe') }}",
+                    type: 'POST', timeout: 60000,
+                    data: JSON.stringify({ audio: reader.result.split(',')[1] }),
+                    contentType: 'application/json', dataType: 'json',
+                    success: d => {
+                        onTranscript(d.transcription || '');
+                        btn.textContent = 'Record response';
+                        btn.disabled    = false;
+                    },
+                    error: () => {
+                        alert('Transcription failed. Please try again.');
+                        btn.textContent = 'Record response';
+                        btn.disabled    = false;
+                    }
+                });
+            };
+            reader.readAsDataURL(blob);
+            recStream.getTracks().forEach(t => t.stop());
+            mediaRec = null; recStream = null;
+        };
     }
-});
+}
 
+// ═══════════════════════════════════════════════
+//  TYPE DETECTION & OPTION PARSING
+// ═══════════════════════════════════════════════
+function detectType(msg) {
+    if (/you may select more than one|select all that apply|you can mention as many as you like|mention as many|as many as you like/i.test(msg)) return 'multi';
+    if (/scale of 1 to 5|\bScale\s*:/i.test(msg))                        return 'scale';
+    if (/\bOptions\s*:/i.test(msg))                                       return 'single';
+    return 'open';
+}
+
+// Options whose names contain "/" — must be hardcoded to survive LLM reformatting
+const KNOWN_OPTS = {
+    'Which financial areas concern you most': [
+        'Stock market volatility',
+        'Euro/exchange rate pressure',
+        'Finnish government bonds/sovereign risk',
+        'Banking sector stability',
+        'Pension funds and long-term savings',
+        'Insurance and risk markets',
+        'None'
+    ]
+};
+
+function parseOpts(msg) {
+    // Check known-options map first to prevent " / " splitting inside compound names
+    for (const [key, opts] of Object.entries(KNOWN_OPTS)) {
+        if (msg.includes(key)) return opts;
+    }
+    // ── "Options: A / B / C"  or  "Options: A, B, C" ────────────────────────
+    const m = msg.match(/Options(?:\s*\([^)]*\))?\s*:\s*([^\n]+)/i);
+    if (m) {
+        const raw = m[1].trim();
+        let parts = raw.split(' / ').map(s => s.replace(/^or\s+/i, '').trim()).filter(Boolean);
+        if (parts.length <= 1) {
+            parts = raw.split(/,\s*/).map(s => s.replace(/^or\s+/i, '').trim()).filter(Boolean);
+        }
+        return parts;
+    }
+    // ── Bullet/dash list: lines starting with "- " or "• " ─────────────────
+    const bullets = msg.split('\n')
+        .map(l => l.trim())
+        .filter(l => /^[-•]\s+/.test(l))
+        .map(l => l.replace(/^[-•]\s+/, '').trim())
+        .filter(Boolean);
+    if (bullets.length) return bullets;
+    // ── Bare slash list: line with 3+ items separated by " / " ───────────────
+    // Pick the line with the most " / " separators (most likely the options line)
+    let best = '', bestN = -1;
+    msg.split('\n').forEach(l => {
+        const n = (l.match(/ \/ /g) || []).length;
+        if (n >= 2 && n > bestN) { best = l.trim(); bestN = n; }
+    });
+    if (best) {
+        // Strip any question fragment that precedes the options on the same line
+        // e.g. "How long would this last? Days – panic / Weeks / Years" → strip "How long...?"
+        const qi = best.indexOf('?');
+        if (qi !== -1 && qi < best.indexOf(' / ')) best = best.slice(qi + 1).trim();
+        return best.split(' / ').map(s => s.replace(/^or\s+/i, '').trim()).filter(Boolean);
+    }
+    return [];
+}
+
+function parseScale(msg) {
+    const m = msg.match(/Scale\s*:\s*([^\n]+)/i);
+    if (!m) return [];
+    return m[1].split(' / ').map(item => {
+        const p = item.match(/^(\d)\s*=\s*(.+)$/);
+        return p ? { num: p[1], label: p[2].trim() } : null;
+    }).filter(Boolean);
+}
+
+// ═══════════════════════════════════════════════
+//  INPUT PANEL RENDERERS
+// ═══════════════════════════════════════════════
+function panelWaiting() {
+    inputPanel.innerHTML = '<div class="panel-status">Waiting for reply…</div>';
+}
+function panelDone() {
+    inputPanel.innerHTML = '<div class="panel-status done">Interview complete — thank you!</div>';
+}
+
+/* Shared: optional textarea + Submit for Sections B/C/D
+   getSelFn     : () => string|null — returns current selection, or null if nothing chosen
+   disabledInit : bool — whether Submit starts disabled (true when a selection is required first) */
+function buildTextSubmit(getSelFn, disabledInit) {
+    const ta = el('textarea', 'open-textarea opt-ta');
+    ta.placeholder = 'Optional: add any comments here…';
+    ta.maxLength   = 3000;
+    ['copy','cut','paste'].forEach(ev => ta.addEventListener(ev, e => e.preventDefault()));
+
+    const footer = el('div', 'open-footer');
+    const btns   = el('div', 'open-btns');
+    const subBtn = el('button', 'act-btn primary');
+    subBtn.textContent = 'Submit response';
+    subBtn.disabled    = disabledInit;
+
+    subBtn.onclick = () => {
+        const sel = getSelFn();
+        if (!sel || waiting) return;
+        const txt    = ta.value.trim();
+        const answer = txt ? sel + '\n\n' + txt : sel;
+        ta.disabled  = true;
+        inputPanel.querySelectorAll('button').forEach(b => b.disabled = true);
+        submit(answer);
+    };
+
+    btns.appendChild(subBtn);
+    footer.appendChild(el('div', 'open-hint'));   // empty left cell keeps button right-aligned
+    footer.appendChild(btns);
+    inputPanel.appendChild(ta);
+    inputPanel.appendChild(footer);
+    return subBtn;
+}
+
+/* Single-select -------------------------------- */
+function renderSingle(opts, withText) {
+    inputPanel.innerHTML = '';
+    const grid = el('div', 'opts-grid');
+    let selected = null;
+    let subBtn   = null;
+
+    opts.forEach(opt => {
+        const btn = el('button', 'opt-pill');
+        btn.textContent = opt;
+        btn.onclick = () => {
+            if (waiting) return;
+            grid.querySelectorAll('.opt-pill').forEach(b => b.classList.remove('on'));
+            btn.classList.add('on');
+            selected = opt;
+            if (withText) {
+                if (subBtn) subBtn.disabled = false;
+            } else {
+                // Section A: auto-submit immediately
+                grid.querySelectorAll('.opt-pill').forEach(b => b.disabled = true);
+                submit(opt);
+            }
+        };
+        grid.appendChild(btn);
+    });
+
+    inputPanel.appendChild(grid);
+    if (withText) subBtn = buildTextSubmit(() => selected, true);
+}
+
+/* Scale 1-5 ------------------------------------ */
+function renderScale(items, withText) {
+    inputPanel.innerHTML = '';
+    const row = el('div', 'scale-row');
+    let selected = null;
+    let subBtn   = null;
+
+    items.forEach(item => {
+        const wrap = el('div', 'scale-item');
+        const btn  = el('button', 'scale-num');
+        btn.textContent = item.num;
+        btn.title       = item.label;
+        btn.onclick = () => {
+            if (waiting) return;
+            row.querySelectorAll('.scale-num').forEach(b => b.classList.remove('on'));
+            btn.classList.add('on');
+            selected = item.num + (item.label ? ' — ' + item.label : '');
+            if (withText) {
+                if (subBtn) subBtn.disabled = false;
+            } else {
+                row.querySelectorAll('.scale-num').forEach(b => b.disabled = true);
+                submit(selected);
+            }
+        };
+        const lbl = el('div', 'scale-lbl');
+        lbl.textContent = item.label;
+        wrap.appendChild(btn);
+        wrap.appendChild(lbl);
+        row.appendChild(wrap);
+    });
+
+    inputPanel.appendChild(row);
+    if (withText) subBtn = buildTextSubmit(() => selected, true);
+}
+
+/* Multi-select --------------------------------- */
+function renderMulti(opts, withText) {
+    inputPanel.innerHTML = '';
+    const selected = new Set();
+    const grid = el('div', 'opts-grid');
+    let subBtn = null;
+
+    opts.forEach(opt => {
+        const btn = el('button', 'opt-pill');
+        btn.textContent = opt;
+        btn.onclick = () => {
+            if (waiting) return;
+            if (selected.has(opt)) { selected.delete(opt); btn.classList.remove('on'); }
+            else                   { selected.add(opt);    btn.classList.add('on');    }
+            if (subBtn) subBtn.disabled = selected.size === 0;
+        };
+        grid.appendChild(btn);
+    });
+
+    inputPanel.appendChild(grid);
+
+    if (withText) {
+        subBtn = buildTextSubmit(
+            () => selected.size ? Array.from(selected).join(', ') : null,
+            true
+        );
+    } else {
+        // Fallback (not reached in current design — multi only appears in B/C/D)
+        subBtn = el('button', 'act-btn primary');
+        subBtn.textContent = 'Submit selection';
+        subBtn.disabled    = true;
+        subBtn.onclick = () => {
+            if (waiting || selected.size === 0) return;
+            grid.querySelectorAll('.opt-pill').forEach(b => b.disabled = true);
+            subBtn.disabled = true;
+            submit(Array.from(selected).join(', '));
+        };
+        const mrow = el('div', 'multi-submit-row');
+        mrow.appendChild(subBtn);
+        inputPanel.appendChild(mrow);
+    }
+}
+
+/* Open text (C7, D4, and fallback) ------------ */
+function renderOpen() {
+    inputPanel.innerHTML = '';
+    const wrap = el('div', 'open-wrap');
+
+    const ta = el('textarea', 'open-textarea');
+    ta.placeholder = 'Type your response here…';
+    ta.maxLength   = 3000;
+    ['copy', 'cut', 'paste'].forEach(ev =>
+        ta.addEventListener(ev, e => e.preventDefault())
+    );
+
+    const footer  = el('div', 'open-footer');
+    const hint    = el('div', 'open-hint');
+    hint.textContent = 'Please write in full sentences.';
+    const btns    = el('div', 'open-btns');
+
+    const recBtn  = el('button', 'act-btn secondary');
+    recBtn.textContent = 'Record response';
+    recBtn.onclick = () => handleRecord(recBtn, text => { ta.value = text; });
+
+    const subBtn  = el('button', 'act-btn primary');
+    subBtn.textContent = 'Submit response';
+    subBtn.onclick = () => {
+        const val = ta.value.trim();
+        if (!val || waiting) return;
+        ta.disabled     = true;
+        recBtn.disabled = true;
+        subBtn.disabled = true;
+        submit(val);
+    };
+
+    btns.appendChild(recBtn);
+    btns.appendChild(subBtn);
+    footer.appendChild(hint);
+    footer.appendChild(btns);
+    wrap.appendChild(ta);
+    wrap.appendChild(footer);
+    inputPanel.appendChild(wrap);
+}
+
+/* Dispatch based on question type -------------- */
+function renderInput(msg) {
+    const withText = currentTopicIdx > 1;  // B/C/D get optional explanation textarea
+    const type = detectType(msg);
+    if (type === 'single') {
+        const opts = parseOpts(msg);
+        opts.length ? renderSingle(opts, withText) : renderOpen();
+    } else if (type === 'scale') {
+        const items = parseScale(msg);
+        renderScale(items.length ? items : [1,2,3,4,5].map(n => ({ num: String(n), label: '' })), withText);
+    } else if (type === 'multi') {
+        const opts = parseOpts(msg);
+        opts.length ? renderMulti(opts, withText) : renderOpen();
+    } else {
+        renderOpen();
+    }
+}
+
+// ═══════════════════════════════════════════════
+//  SUBMIT
+// ═══════════════════════════════════════════════
+function submit(answer) {
+    if (waiting) return;
+    waiting = true;
+    userMsg(answer);
+    panelWaiting();
+    showTyping();
+
+    jQuery.ajax({
+        url:  "{{ url_for('next') }}",
+        type: 'POST', timeout: 60000,
+        data: JSON.stringify({
+            user_message:  answer,
+            session_id:    "{{ data['session_id'] }}",
+            interview_id:  "{{ data['interview_id'] }}"
+        }),
+        contentType: 'application/json',
+        dataType:    'json',
+        success: function(data) {
+            waiting = false;
+            let msg = data.message.trim();
+            const ended = msg.includes('---END---');
+            if (ended) msg = msg.replace('---END---', '').trim();
+            if (data.topic_idx) currentTopicIdx = data.topic_idx;
+            resolveTyping(msg);
+            if (ended) { done = true; panelDone(); }
+            else       { renderInput(msg); }
+        },
+        error: function() {
+            waiting = false;
+            resolveTyping('There was a technical error. Please try again.');
+            renderOpen();
+        }
+    });
+}
+
+// ═══════════════════════════════════════════════
+//  HELPERS
+// ═══════════════════════════════════════════════
+function el(tag, cls) {
+    const e = document.createElement(tag);
+    if (cls) e.className = cls;
+    return e;
+}
+
+// ═══════════════════════════════════════════════
+//  INIT
+// ═══════════════════════════════════════════════
+(function () {
+    const first = {{ data['message'] | tojson }};
+    if (first === 'interview_in_progress_error') {
+        botMsg('This interview session is already in progress. Please exit.');
+        return;
+    }
+    botMsg(first);
+    renderInput(first);
+}());
 </script>
+</body>
+</html>

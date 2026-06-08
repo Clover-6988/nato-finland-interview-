@@ -9,6 +9,21 @@ from core.auxiliary import (
 )
 
 
+def _question_core(q: str) -> str:
+    """
+    Return the question text only, stripping any trailing Options/Scale line.
+
+    Each quoted block in the topic description is formatted as:
+        <question sentence(s)>\n\nOptions: A / B / C
+    or  <question sentence(s)>\n\nScale: 1 = X / 2 = Y
+
+    The LLM (transition or probe agent) may reproduce the question faithfully but
+    reformat or omit the Options/Scale line.  Matching only the question core makes
+    history lookup robust against those variations.
+    """
+    return re.split(r'\n\s*\n(?:Options|Scale)\b', q, maxsplit=1, flags=re.IGNORECASE)[0].strip()
+
+
 def _next_required_question(parameters: dict, history: list) -> str:
     """
     Return the next required question to ask, entirely in Python.
@@ -29,6 +44,11 @@ def _next_required_question(parameters: dict, history: list) -> str:
     if not questions:
         return ''
 
+    # For each question, strip the trailing Options/Scale line before matching.
+    # The transition agent may not reproduce options verbatim, but the question
+    # sentence itself is stable enough for substring matching.
+    cores = [_question_core(q) for q in questions]
+
     # Find the index of the last required question asked in this topic.
     # Uses substring matching so that transition-agent bridging text
     # ("Let's turn to economics. [B1 text]") is still correctly identified
@@ -40,10 +60,10 @@ def _next_required_question(parameters: dict, history: list) -> str:
                 or m['content'] == first_question):
             continue
         content = m['content']
-        for i, q in enumerate(questions):
-            if q in content:           # substring match, not equality
+        for i, core in enumerate(cores):
+            if core and core in content:   # match question text, not options line
                 last_required_idx = i
-                break                  # one required question per message
+                break                      # one required question per message
 
     if last_required_idx == -1:
         return questions[0]
@@ -142,14 +162,15 @@ class LLMAgent(object):
             logging.info("Section A probe — advancing directly.")
             return next_required
 
-        # ── Section B / C / D: LLM decides ───────────────────────────────────────
+        # ── Section B / C / D: LLM decides (or is bypassed for scale) ──────────
         topic_desc = self.parameters['interview_plan'][current_topic_idx - 1]['topic']
         questions_list = re.findall(r'"([^"]+)"', topic_desc)
 
         # Determine whether the last interviewer question was a required question
-        # or an LLM-generated follow-up. Use substring matching (same as
-        # _next_required_question) so transition bridging text is not mistaken
-        # for a follow-up.
+        # or an LLM-generated follow-up.  Use _question_core matching (strips the
+        # Options/Scale line) so the check succeeds even when the LLM omitted that
+        # line from its output — the previous bug that caused was_follow_up to be
+        # True incorrectly for scale questions.
         topic_qs = [
             m['content'] for m in history
             if m.get('topic_idx') == current_topic_idx
@@ -157,7 +178,45 @@ class LLMAgent(object):
             and m['content'] != first_q
         ]
         last_question = topic_qs[-1] if topic_qs else ''
-        was_follow_up = bool(last_question) and not any(q in last_question for q in questions_list)
+        was_follow_up = bool(last_question) and not any(
+            _question_core(q) in last_question for q in questions_list
+        )
+
+        # Identify the last *required* question from the original parameters list
+        # (not from what the LLM actually output, which may differ).
+        # If the most recent interviewer turn was a follow-up, scan backwards for
+        # the most recent required question.
+        last_required_text = next(
+            (q for q in questions_list if _question_core(q) and _question_core(q) in last_question),
+            ''
+        )
+        if not last_required_text and was_follow_up:
+            for past_q in reversed(topic_qs[:-1]):
+                m = next(
+                    (q for q in questions_list if _question_core(q) and _question_core(q) in past_q),
+                    ''
+                )
+                if m:
+                    last_required_text = m
+                    break
+
+        # Scale questions must never trigger LLM improvisation and must always be
+        # returned verbatim so the frontend can parse the Scale: labels and render
+        # numbered buttons.  Bypass the LLM when:
+        #   • the last required question was a scale question (prevent follow-up on
+        #     a numeric rating — this was the source of the B2 → improv bug), OR
+        #   • the next required question is a scale question (guarantee the Scale:
+        #     line appears in the output so the UI renders buttons, not a text box).
+        last_was_scale = bool(re.search(r'\bScale\s*:', last_required_text, re.IGNORECASE))
+        next_is_scale  = bool(re.search(r'\bScale\s*:', next_required,       re.IGNORECASE))
+
+        if last_was_scale or next_is_scale:
+            logging.info(
+                f"probe_within_topic() — scale bypass "
+                f"(last_scale={last_was_scale}, next_scale={next_is_scale}) "
+                f"→ '{next_required[:60]}'"
+            )
+            return 'Thank you. ' + next_required
 
         # Find the last answer given in this topic.
         last_answer = next(
@@ -170,6 +229,30 @@ class LLMAgent(object):
         probe_cfg = self.parameters.get('probe', {})
 
         if was_follow_up:
+            # Guard: _next_required_question() only recognises required questions
+            # whose core text appears verbatim in a 'question'-type history entry.
+            # If the LLM paraphrased next_required (asked it in natural language
+            # without the exact wording), the function can't detect it was asked
+            # and keeps returning the same question.  Detect this by checking
+            # whether the respondent's last answer contains one of next_required's
+            # listed options — if it does, the question was already answered and we
+            # must advance one step further.
+            opts_m = re.search(
+                r'Options(?:\s*\([^)]*\))?\s*:\s*([^\n]+)', next_required, re.IGNORECASE
+            )
+            if opts_m:
+                options = [o.strip() for o in opts_m.group(1).split(' / ')]
+                already_answered = any(
+                    re.search(r'\b' + re.escape(opt) + r'\b', last_answer, re.IGNORECASE)
+                    for opt in options if len(opt) > 4
+                )
+                if already_answered:
+                    req_idx = next(
+                        (i for i, q in enumerate(questions_list) if q == next_required), -1
+                    )
+                    if 0 <= req_idx < len(questions_list) - 1:
+                        next_required = questions_list[req_idx + 1]
+
             # After a follow-up: always advance to the next required question.
             prompt = (
                 "You are conducting a warm, conversational academic research interview "
@@ -179,7 +262,10 @@ class LLMAgent(object):
                 f"The respondent answered: {last_answer}\n\n"
                 f"Next required question to ask: {next_required}\n\n"
                 "Write one brief sentence acknowledging their answer, then ask the next "
-                "required question exactly as written above. Keep it natural. "
+                "required question exactly as written above. Keep it natural.\n"
+                "FORMATTING: If the required question includes answer options, reproduce "
+                "them on a new line exactly as written, using the format "
+                "'Options: A / B / C'. Do not reformat or paraphrase the options.\n"
                 "Plain text only — no bold, no asterisks, no markdown formatting."
             )
         else:
@@ -204,6 +290,10 @@ class LLMAgent(object):
                 "generic (e.g. not 'can you say more?').\n"
                 "- Keep your response short and conversational.\n"
                 "- No labels or preamble.\n"
+                "- Option A only: if the required question includes answer options, "
+                "reproduce them on a new line exactly as written using the format "
+                "'Options: A / B / C'. Do not reformat or paraphrase the options.\n"
+                "- Option B only: never include any options list in a follow-up question.\n"
                 "- Plain text only — no bold, no asterisks, no markdown formatting."
             )
 
