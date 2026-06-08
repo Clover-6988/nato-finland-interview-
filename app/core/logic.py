@@ -44,13 +44,22 @@ def begin_interview_session(session_id:str, interview_id:str) -> dict:
     if not INTERVIEW_PARAMETERS.get(interview_id):
         raise ValueError(f"Invalid interview parameters '{interview_id}' specified!")
     parameters = INTERVIEW_PARAMETERS[interview_id]
+
+    # Guard against page-refresh / GET-retry wiping an in-progress session.
+    # If the session file already exists, return the first question for display
+    # without touching the saved history — the next POST /next will resume correctly.
+    if db.load_remote_session(session_id):
+        logging.info(f"Session '{session_id}' already exists — skipping reset.")
+        return {'session_id': session_id, 'interview_id': interview_id,
+                'message': parameters['first_question']}
+
     interview = InterviewManager(db, session_id)
     interview.begin_session(parameters)
     message = parameters['first_question']
     interview.add_chat_to_session(message, type='question')
     logging.info("Beginning {} interview session '{}' with prompt '{}'".format(
-        interview_id, 
-        session_id, 
+        interview_id,
+        session_id,
         message
     ))
     return {'session_id':session_id, 'interview_id':interview_id, 'message':message}
