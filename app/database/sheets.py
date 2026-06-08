@@ -26,6 +26,26 @@ def _get_client():
     return _client
 
 
+def verify_connection():
+    """
+    Called once at startup to confirm credentials and Sheet ID are valid.
+    Logs the result but never raises — file storage remains the primary store.
+    """
+    if not _GSPREAD_AVAILABLE:
+        logging.warning("Sheets startup check skipped: gspread not installed.")
+        return
+    sheet_id = os.environ.get('GOOGLE_SHEETS_ID', '')
+    if not sheet_id or not os.environ.get('GOOGLE_CREDENTIALS', ''):
+        logging.warning("Sheets startup check skipped: env vars not set.")
+        return
+    try:
+        sheet = _get_client().open_by_key(sheet_id).sheet1
+        logging.info(f"Sheets startup check OK — sheet title: '{sheet.title}', "
+                     f"sheet_id={sheet_id}")
+    except Exception as e:
+        logging.error(f"Sheets startup check FAILED — sheet_id={sheet_id} error: {e}")
+
+
 def append_qa_row(session_id: str, question_id: str, question: str, answer: str):
     """
     Append one Q/A row to the Google Sheet identified by GOOGLE_SHEETS_ID.
@@ -49,4 +69,4 @@ def append_qa_row(session_id: str, question_id: str, question: str, answer: str)
         )
         logging.info("Sheets: success")
     except Exception as e:
-        logging.error(f"Sheets error: {e}")
+        logging.error(f"Sheets error: {e} - Sheet ID: {sheet_id}")

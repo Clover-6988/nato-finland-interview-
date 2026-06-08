@@ -3,7 +3,7 @@ import os
 from parameters import INTERVIEW_PARAMETERS, ANTHROPIC_API_KEY
 from core.manager import InterviewManager
 from core.agent import LLMAgent, MockLLMAgent
-from database.sheets import append_qa_row
+from database.sheets import append_qa_row, verify_connection
 
 def connect_to_database():
     """ Instantiate specific backend database. """
@@ -19,6 +19,7 @@ if os.getenv("MOCK_MODE", "").lower() in ("1", "true", "yes"):
 else:
     agent = LLMAgent(ANTHROPIC_API_KEY)
 db = connect_to_database()
+verify_connection()
 
 def load_interview_session(session_id:str) -> dict:
     """ Return interview session history to user. """
