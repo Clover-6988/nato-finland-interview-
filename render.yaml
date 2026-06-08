@@ -1,0 +1,13 @@
+services:
+  - type: web
+    name: nato-finland-interview
+    env: python
+    buildCommand: pip install -r app/requirements.txt
+    startCommand: cd app && gunicorn app:app --bind 0.0.0.0:$PORT --workers 2 --timeout 120
+    envVars:
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: ADMIN_PASSWORD
+        sync: false
+      - key: DATA_DIR
+        value: ./data

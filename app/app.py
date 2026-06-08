@@ -1,11 +1,16 @@
 """This Flask application provides several endpoints to manage and interact with interview sessions. Each endpoint serves a specific purpose, such as starting an interview session, continuing with the next question, transcribing an audio message from interviewees, loading, deleting, or retrieving stored interviews sessions. Below is a detailed documentation for each endpoint."""
 
+import io
+import os
+import zipfile
+
 from flask import (
-	Flask, 
+	Flask,
 	request,
-	jsonify, 
-	render_template, 
-	make_response
+	jsonify,
+	render_template,
+	make_response,
+	send_file,
 )
 from core import decorators, logic
 
@@ -179,6 +184,29 @@ def retrieve():
 	"""
 	response = logic.retrieve_sessions()
 	return jsonify(response)
+
+
+@app.route('/admin/download', methods=['GET'])
+def admin_download():
+	"""Endpoint: /admin/download?password=<ADMIN_PASSWORD> (GET)
+	Returns a zip of all session JSON files in the data directory.
+	Requires the ADMIN_PASSWORD environment variable to be set.
+	"""
+	admin_password = os.environ.get('ADMIN_PASSWORD', '')
+	if not admin_password or request.args.get('password') != admin_password:
+		return make_response('Unauthorized', 401)
+
+	data_dir = os.environ.get('DATA_DIR', './app/data')
+	buf = io.BytesIO()
+	with zipfile.ZipFile(buf, 'w', zipfile.ZIP_DEFLATED) as zf:
+		if os.path.isdir(data_dir):
+			for filename in os.listdir(data_dir):
+				filepath = os.path.join(data_dir, filename)
+				if os.path.isfile(filepath):
+					zf.write(filepath, filename)
+	buf.seek(0)
+	return send_file(buf, mimetype='application/zip',
+	                 as_attachment=True, download_name='sessions.zip')
 
 
 if __name__ == "__main__":
