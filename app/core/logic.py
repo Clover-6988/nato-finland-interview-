@@ -3,6 +3,7 @@ import os
 from parameters import INTERVIEW_PARAMETERS, ANTHROPIC_API_KEY
 from core.manager import InterviewManager
 from core.agent import LLMAgent, MockLLMAgent
+from database.sheets import append_qa_row
 
 def connect_to_database():
     """ Instantiate specific backend database. """
@@ -113,6 +114,16 @@ def next_question(session_id:str, interview_id:str, user_message:str=None) -> di
     """
     interview.add_chat_to_session(user_message, type="answer")
 
+    # Mirror the Q/A pair to Google Sheets (no-ops if env vars not set).
+    # Runs after file storage so a Sheets failure never affects the interview.
+    history = interview.get_history()
+    answer_entry = history[-1]
+    prev_question = next(
+        (m for m in reversed(history[:-1]) if m.get('type') == 'question'), None
+    )
+    if prev_question:
+        question_id = f"T{answer_entry.get('topic_idx', '')}_Q{answer_entry.get('question_idx', '')}"
+        append_qa_row(session_id, question_id, prev_question['content'], user_message)
 
     ##### CONTINUE INTERVIEW BASED ON WORKFLOW #####
 
