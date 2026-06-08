@@ -92,7 +92,7 @@ def next_question(session_id:str, interview_id:str, user_message:str=None) -> di
         interview = resume_interview_session(session_id, interview_id, user_message)
         parameters = interview.parameters
     except AssertionError as e:
-        logging.warning(f"Could not resume session '{session_id}': {e} — starting new session.")
+        logging.error(f"SESSION RESUME FAILED for '{session_id}': {e}")
         return begin_interview_session(session_id, interview_id)
 
     # Exit condition: this interview has been previously ended
@@ -142,13 +142,17 @@ def next_question(session_id:str, interview_id:str, user_message:str=None) -> di
     num_topics = len(parameters['interview_plan'])
     current_topic_idx = interview.get_current_topic()
     on_last_topic = current_topic_idx == num_topics
-    logging.info(f"On topic {current_topic_idx}/{num_topics}...")
 
     # Current question within topic guide
     current_question_idx = interview.get_current_topic_question()
     num_questions = parameters['interview_plan'][current_topic_idx-1]['length']
     on_last_question = current_question_idx >= num_questions
-    logging.info(f"On question {current_question_idx}/{num_questions}...")
+
+    logging.error(
+        f"[{session_id[:8]}] topic={current_topic_idx}/{num_topics} "
+        f"question_idx={current_question_idx} length={num_questions} "
+        f"on_last_question={on_last_question}"
+    )
 
     # Continue in workflow
     if on_last_topic and on_last_question:
