@@ -2,10 +2,12 @@
 
 import io
 import os
+import uuid
 import zipfile
 
 from flask import (
 	Flask,
+	redirect,
 	request,
 	jsonify,
 	render_template,
@@ -22,6 +24,13 @@ app.add_url_rule('/healthcheck', 'healthcheck', lambda: ('', 200))
 def index():
 	"""For verifying that the app is running. Not needed in practice."""
 	return 'Running!'
+
+@app.route('/NATO_FINLAND', methods=['GET'])
+def nato_finland_entry():
+	"""Redirect to a fresh session so sharing one link gives each visitor their own session."""
+	session_id = str(uuid.uuid4())
+	return redirect(f'/NATO_FINLAND/{session_id}')
+
 
 @app.route('/<interview_id>/<session_id>', methods=['GET'])
 @decorators.handle_500
