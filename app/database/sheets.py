@@ -32,10 +32,13 @@ def append_qa_row(session_id: str, question_id: str, question: str, answer: str)
     No-ops silently when either env var is absent or gspread is unavailable.
     Errors are logged but never propagated — file storage is the primary store.
     """
+    logging.info("Sheets: attempting to write row")
     if not _GSPREAD_AVAILABLE:
+        logging.error("Sheets error: gspread not installed")
         return
     sheet_id = os.environ.get('GOOGLE_SHEETS_ID', '')
     if not sheet_id or not os.environ.get('GOOGLE_CREDENTIALS', ''):
+        logging.error("Sheets error: GOOGLE_SHEETS_ID or GOOGLE_CREDENTIALS not set")
         return
     try:
         sheet = _get_client().open_by_key(sheet_id).sheet1
@@ -44,6 +47,6 @@ def append_qa_row(session_id: str, question_id: str, question: str, answer: str)
             [session_id, timestamp, question_id, question, answer],
             value_input_option='RAW',
         )
-        logging.info(f"Sheets: appended row session={session_id} qid={question_id}")
-    except Exception as exc:
-        logging.error(f"Sheets write failed: {exc}")
+        logging.info("Sheets: success")
+    except Exception as e:
+        logging.error(f"Sheets error: {e}")
